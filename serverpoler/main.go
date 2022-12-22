@@ -3,7 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -21,10 +25,15 @@ type output struct {
 }
 
 func main() {
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
 	// starts after minute of waiting
 	tick := time.Tick(frequency)
 	for {
 		select {
+		case s := <-interrupt:
+			log.Fatal("Received signal:", s.String())
 		case x := <-tick:
 			for _, server := range servers {
 				count, err := getCount(httpPrefix + server + metricPath)
