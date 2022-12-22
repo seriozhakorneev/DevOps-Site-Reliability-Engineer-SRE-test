@@ -18,29 +18,42 @@ const (
 	outputLayout = "2006-01-02 15:04:00"
 )
 
-var servers = [...]string{"maria.ru", "rose.ru", "sina.ru"}
-
-type output struct {
-	Count *int `json:"count"`
-}
+var reqServers = []string{"maria.ru", "rose.ru", "sina.ru"}
 
 func main() {
 	interrupt := make(chan os.Signal, 1)
+	stdOut := make(chan string)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
 	// starts after minute of waiting
-	tick := time.Tick(frequency)
+	go poller(reqServers, frequency, stdOut)
+
 	for {
 		select {
 		case s := <-interrupt:
-			log.Fatal("Received signal:", s.String())
+			log.Println("Received signal:", s.String())
+			os.Exit(0)
+		case out := <-stdOut:
+			fmt.Print(out)
+		}
+	}
+}
+
+func poller(
+	servers []string,
+	duration time.Duration,
+	results chan<- string,
+) {
+	tick := time.Tick(duration)
+	for {
+		select {
 		case x := <-tick:
 			for _, server := range servers {
 				count, err := getCount(httpPrefix + server + metricPath)
 				if err != nil {
-					fmt.Println(x.Format(outputLayout), server, err)
+					results <- fmt.Sprintln(x.Format(outputLayout), server, err)
 				} else {
-					fmt.Println(x.Format(outputLayout), server, count)
+					results <- fmt.Sprintln(x.Format(outputLayout), server, count)
 				}
 			}
 		}
@@ -68,7 +81,9 @@ func getCount(path string) (int, error) {
 		)
 	}
 
-	o := output{}
+	o := struct {
+		Count *int `json:"count"`
+	}{}
 	err = json.NewDecoder(response.Body).Decode(&o)
 	if err != nil {
 		return 0, fmt.Errorf("decode json failed: %w", err)

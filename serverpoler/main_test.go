@@ -6,8 +6,59 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
+
+func TestPollerError(t *testing.T) {
+	t.Parallel()
+
+	testServer := "invalid_server"
+	testServers := []string{testServer}
+	testResult := make(chan string)
+
+	expectedOut := fmt.Sprintf(
+		"invalid_server request failed: "+
+			"Get \"%s\": "+
+			"dial tcp: lookup invalid_server: no such host",
+		httpPrefix+testServer+metricPath,
+	)
+
+	go poller(testServers, time.Second*1, testResult)
+
+	out := strings.TrimSpace(<-testResult)
+
+	if out[20:] != expectedOut {
+		t.Fatalf("expected output: %s, got: %s", expectedOut, out)
+	}
+}
+
+func TestPollerResult(t *testing.T) {
+	t.Parallel()
+
+	expCount := 220
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusOK)
+		rw.Write([]byte(fmt.Sprintf(`{"count": %d}`, expCount)))
+	}))
+	defer server.Close()
+
+	testResult := make(chan string)
+	testServer := server.URL[7:]
+
+	go poller([]string{testServer}, time.Second*1, testResult)
+
+	out := <-testResult
+	expectedOut := fmt.Sprintf("%s %d", testServer, expCount)
+
+	if out[20:] == expectedOut {
+		t.Fatalf("expected output: %s, got: %s", expectedOut, out)
+	}
+
+}
 
 func TestGetCountRequestFailed(t *testing.T) {
 	t.Parallel()
