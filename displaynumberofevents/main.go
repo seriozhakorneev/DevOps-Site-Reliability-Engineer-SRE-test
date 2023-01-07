@@ -42,6 +42,8 @@ func main() {
 	}
 }
 
+// getEventsInMinute
+// receives *bufio.Scanner, made it just for speed, don't want to make +1 loop storing lines to slice.
 func getEventsInMinute(scanner *bufio.Scanner, layout, suffix string) ([]eventCount, error) {
 	events := make([]eventCount, 1)
 
